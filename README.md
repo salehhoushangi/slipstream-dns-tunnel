@@ -39,7 +39,7 @@ Slipstream supports two deployment modes:
 
 ---
 
-## 1) Integrated Deployment (Recommended)
+## 1) Integrated Deployment (Recommended) -->slipstream-deploy.sh
 
 Use this method if:
 
