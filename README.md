@@ -23,8 +23,8 @@ SSH Client
   ->
 DNS Tunnel (UDP 53)
   ->
-Slipstream Server
-  ->
+Slipstream Server (server with unrestricted internet access)
+->
 127.0.0.1:22 (Server SSH)
 
 You are effectively running SSH over DNS.
