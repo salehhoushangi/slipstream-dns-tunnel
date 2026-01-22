@@ -1,9 +1,9 @@
 # Slipstream DNS Tunnel
 
-Slipstream creates a DNS tunnel between a client inside a restricted network and a remote public server.  
-It allows you to forward SSH or other TCP services over DNS traffic.
+Slipstream creates a DNS tunnel between a client inside a restricted network and a remote public server.
+It allows forwarding SSH or other TCP services over DNS traffic.
 
-This makes it possible to access a remote server even in environments where normal outbound connections are blocked but DNS traffic is still allowed.
+This enables access to a remote server in environments where normal outbound connections are blocked but DNS traffic is still allowed.
 
 ---
 
@@ -11,13 +11,23 @@ This makes it possible to access a remote server even in environments where norm
 
 Slipstream runs two components:
 
-- A **server component** on a public server
-- A **client component** inside a restricted network
+- Server component – runs on a public server
+- Client component – runs inside the restricted network
 
-Traffic flow:
+Traffic Flow:
 
-SSH Client -> 127.0.0.1:7000 (Slipstream Client) -> DNS Tunnel (UDP 53) ->Slipstream Server -> 127.0.0.1:22 (Server SSH)
+SSH Client
+  ->
+127.0.0.1:7000 (Slipstream Client)
+  ->
+DNS Tunnel (UDP 53)
+  ->
+Slipstream Server
+  ->
+127.0.0.1:22 (Server SSH)
+
 You are effectively running SSH over DNS.
+
 ---
 
 ## Requirements
@@ -39,83 +49,77 @@ You are effectively running SSH over DNS.
 
 ## Installation
 
-All setup is done from the **client machine**.
+All setup is performed from the client machine.
 
-Make the deploy script executable:
+1) Make the deploy script executable:
 
-```bash
 chmod +x slipstream-deploy.sh
 
-Run the script:
+2) Run the script:
 
 ./slipstream-deploy.sh
 
-The script will automatically configure:
+The script automatically configures:
+- The remote server
+- The local client
 
-    The server (remote machine)
+---
 
-    The client (local machine)
+## Configuration Prompts Explained
 
-Configuration Prompts Explained
+Server Public IP
+Enter the public IP address of your server.
 
-During setup, you will be asked for the following values:
-
-Server public IP
-Enter your server’s public IP address.
-
-Server SSH user
+Server SSH User
 Usually root.
 
-Tunnel domain
+Tunnel Domain
 A domain used for the DNS tunnel.
 Both client and server must use the same domain.
 Do NOT use public domains like google.com.
 
-Server DNS listen port
+Server DNS Listen Port
 Normally 53.
 
-Client TCP listen port
+Client TCP Listen Port
 Local port on the client (default: 7000).
 
-Server target-address
+Server Target Address
 For SSH forwarding, use:
-
 127.0.0.1:22
 
 This forwards traffic to the server’s SSH service.
-Connecting Through the Tunnel
 
-After successful deployment, the client listens locally on:
+---
 
+## Connecting Through the Tunnel
+
+After successful deployment, the client listens on:
 127.0.0.1:7000
 
 To connect to your server through the DNS tunnel:
 
 ssh -p 7000 root@127.0.0.1
 
-Use your normal server SSH password or SSH key.
-Verifying Services
-On the Client
+Use your normal SSH password or SSH key.
 
-Check client service status:
+---
+
+## Verifying Services
+
+On the Client:
 
 sudo systemctl status slipstream-client
-
-Check if the local port is listening:
-
 sudo netstat -ntlp | grep 7000
 
-On the Server
-
-Check server service status:
+On the Server:
 
 sudo systemctl status slipstream-server
-
-Verify UDP port 53 is listening:
-
 sudo ss -lunp | grep 53
 
-Troubleshooting
+---
+
+## Troubleshooting
 
 Check logs:
 
@@ -123,21 +127,16 @@ journalctl -u slipstream-client -n 100
 journalctl -u slipstream-server -n 100
 
 Make sure:
+- UDP port 53 is open in the server firewall
+- The same tunnel domain is configured on both sides
+- SSH is running on the server
+- DNS traffic is not being blocked
 
-    UDP port 53 is open in the server firewall
+---
 
-    The same tunnel domain is configured on both sides
+## Important Notes
 
-    SSH is running on the server
-
-    DNS traffic is not being blocked
-
-Important Notes
-
-    Do NOT use public domains like google.com
-
-    Use a domain you control
-
-    Ensure UDP port 53 is open on the server
-
-    Both client and server must use the same tunnel domain
+- Do NOT use public domains like google.com
+- Use a domain you control
+- Ensure UDP port 53 is open on the server
+- Both client and server must use the same tunnel domain
