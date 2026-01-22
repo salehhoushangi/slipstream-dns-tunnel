@@ -1,20 +1,21 @@
 # Slipstream DNS Tunnel
 
 Slipstream creates a DNS tunnel between a client inside a restricted network and a remote public server.
+
 It allows forwarding SSH or other TCP services over DNS traffic.
 
-This enables access to a remote server in environments where normal outbound connections are blocked but DNS traffic is still allowed.
+This makes it possible to access a remote server even when normal outbound connections (like TCP 22) are blocked, but DNS traffic (UDP 53) is still allowed.
 
 ---
 
-## How It Works
+# How It Works
 
 Slipstream runs two components:
 
-- Server component – runs on a public server
-- Client component – runs inside the restricted network
+- slipstream-server → runs on a public server
+- slipstream-client → runs inside the restricted network
 
-Traffic Flow:
+Traffic flow:
 
 SSH Client
   ->
@@ -30,113 +31,214 @@ You are effectively running SSH over DNS.
 
 ---
 
-## Requirements
+# Deployment Modes
 
-### Server (Public / Outside Network)
+Before starting installation, determine whether you have direct SSH access (TCP port 22) to the server.
+
+Slipstream supports two deployment modes:
+
+---
+
+## 1) Integrated Deployment (Recommended)
+
+Use this method if:
+
+- The client machine CAN connect to the server via SSH (TCP port 22 reachable).
+- You have SSH credentials for the server.
+
+In this mode:
+
+- You run a single deployment script from the client.
+- The script connects to the server via SSH.
+- It installs and configures both server and client automatically.
+
+Advantages:
+
+- Fully automated
+- No manual coordination
+- Fewer configuration mismatches
+- Faster setup
+
+If SSH connectivity exists, this is the preferred method.
+
+---
+
+## 2) Split Deployment (When SSH Is NOT Available)
+
+Use this method if:
+
+- Outbound TCP 22 is blocked
+- The server is unreachable on SSH from the client network
+- You do not have SSH credentials
+- Network policy blocks SSH traffic
+
+In this mode:
+
+- A server administrator runs the server setup script directly on the public server.
+- The client operator runs the client setup script locally.
+- No SSH connection from client to server is required during installation.
+
+This method is specifically designed for restricted network environments.
+
+---
+
+# Requirements
+
+## Server (Public / Outside Network)
 
 - Linux (Ubuntu/Debian recommended)
-- SSH access
-- UDP port 53 open in the firewall
-- A domain you control (recommended)
+- Root or sudo access
+- UDP port 53 open (or chosen DNS port)
+- Internet access for dependency installation
+- A domain name (recommended)
 
-### Client (Restricted Network)
+## Client (Restricted Network)
 
 - Linux
 - sudo access
-- Internet connection
+- Internet access
+- Ability to send UDP traffic to SERVER_IP:DNS_PORT
 
 ---
 
-## Installation
+# Split Deployment Instructions
 
-All setup is performed from the client machine.
-
-1) Make the deploy script executable:
-
-chmod +x slipstream-deploy.sh
-
-2) Run the script:
-
-./slipstream-deploy.sh
-
-The script automatically configures:
-- The remote server
-- The local client
+If using Split Deployment:
 
 ---
 
-## Configuration Prompts Explained
+## Server-Side Setup (Run by Server Administrator)
 
-Server Public IP
-Enter the public IP address of your server.
+The server administrator must:
 
-Server SSH User
-Usually root.
+1) Run the server setup script directly on the server:
 
-Tunnel Domain
-A domain used for the DNS tunnel.
-Both client and server must use the same domain.
-Do NOT use public domains like google.com.
+chmod +x server-setup.sh
+DOMAIN=mytunnel.example DNS_LISTEN_PORT=53 TARGET_ADDRESS=127.0.0.1:22 ./server-setup.sh
 
-Server DNS Listen Port
-Normally 53.
+This will:
 
-Client TCP Listen Port
-Local port on the client (default: 7000).
+- Install dependencies + Rust
+- Build slipstream-server
+- Generate TLS certificate and key
+- Create systemd service
+- Start slipstream-server
+- Bind to UDP port 53
 
-Server Target Address
-For SSH forwarding, use:
-127.0.0.1:22
+2) Verify the service:
 
-This forwards traffic to the server’s SSH service.
+systemctl status slipstream-server
+
+3) Verify UDP port is listening:
+
+ss -lunp | grep :53
+
+4) Ensure firewall allows UDP 53:
+- ufw
+- iptables
+- cloud provider security groups
+
+If UDP 53 is blocked, the tunnel will not function.
 
 ---
 
-## Connecting Through the Tunnel
+## Values the Server Admin Must Provide
 
-After successful deployment, the client listens on:
-127.0.0.1:7000
+The client operator needs:
 
-To connect to your server through the DNS tunnel:
+- SERVER_IP
+- DNS_LISTEN_PORT
+- DOMAIN
+- TARGET_ADDRESS (usually 127.0.0.1:22)
+
+Example:
+
+SERVER_IP=203.0.113.10
+DNS_LISTEN_PORT=53
+DOMAIN=mytunnel.example
+TARGET_ADDRESS=127.0.0.1:22
+
+---
+
+## Client-Side Setup (Inside Restricted Network)
+
+After receiving server values:
+
+SERVER_IP=203.0.113.10 DOMAIN=mytunnel.example DNS_LISTEN_PORT=53 CLIENT_TCP_PORT=7000 ./client-setup.sh
+
+This will:
+
+- Build slipstream-client
+- Create and start systemd service
+- Open local TCP listener (127.0.0.1:7000)
+
+---
+
+# Connecting Through the Tunnel
+
+Once client is running:
 
 ssh -p 7000 root@127.0.0.1
 
-Use your normal SSH password or SSH key.
+Traffic path:
+
+Local SSH
+  ->
+127.0.0.1:7000
+  ->
+slipstream-client
+  ->
+UDP 53 DNS tunnel
+  ->
+slipstream-server
+  ->
+127.0.0.1:22 (server SSH)
 
 ---
 
-## Verifying Services
+# Verifying Services
 
-On the Client:
+## On Client
 
-sudo systemctl status slipstream-client
-sudo netstat -ntlp | grep 7000
+systemctl status slipstream-client
+ss -ntlp | grep 7000
 
-On the Server:
+## On Server
 
-sudo systemctl status slipstream-server
-sudo ss -lunp | grep 53
+systemctl status slipstream-server
+ss -lunp | grep :53
 
 ---
 
-## Troubleshooting
+# Troubleshooting
 
 Check logs:
 
 journalctl -u slipstream-client -n 100
 journalctl -u slipstream-server -n 100
 
-Make sure:
-- UDP port 53 is open in the server firewall
-- The same tunnel domain is configured on both sides
-- SSH is running on the server
-- DNS traffic is not being blocked
+Ensure:
+
+- UDP port 53 is open on the server
+- Client can reach SERVER_IP:DNS_PORT via UDP
+- Same DOMAIN is configured on both sides
+- SSH service is running on server (if forwarding to 127.0.0.1:22)
 
 ---
 
-## Important Notes
+# Technical Limitations
 
-- Do NOT use public domains like google.com
-- Use a domain you control
-- Ensure UDP port 53 is open on the server
-- Both client and server must use the same tunnel domain
+- Split deployment is required only if SSH (TCP 22) from client to server is unavailable.
+- The DNS tunnel requires outbound UDP from client to SERVER_IP:DNS_PORT.
+- Some restrictive networks allow DNS only to approved resolvers.
+- If UDP 53 to your server is blocked, the tunnel will not work.
+- Using public domains (e.g., google.com) is not recommended.
+
+---
+
+# Important Notes
+
+- Always use the same DOMAIN on both client and server.
+- Ensure firewall rules allow inbound UDP on the server.
+- Integrated deployment is simpler when SSH access exists.
+- Split deployment exists for restricted environments.
