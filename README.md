@@ -16,19 +16,9 @@ Slipstream runs two components:
 
 Traffic flow:
 
-SSH Client
-↓
-127.0.0.1:7000 (Slipstream Client)
-↓
-DNS Tunnel (UDP 53)
-↓
-Slipstream Server
-↓
-127.0.0.1:22 (Server SSH)
-
-
+SSH Client ->
+127.0.0.1:7000 (Slipstream Client) -> DNS Tunnel (UDP 53) ->Slipstream Server -> 127.0.0.1:22 (Server SSH)
 You are effectively running SSH over DNS.
-
 ---
 
 ## Requirements
